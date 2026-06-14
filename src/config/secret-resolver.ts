@@ -61,6 +61,8 @@ async function resolveSecretInput(
       return resolveFileRef(input, lookupProvider(secretsCfg, input));
     case 'exec':
       return resolveExecRef(input, lookupProvider(secretsCfg, input), appId, secretPaths);
+    case 'keychain':
+      return resolveKeychainRef(input);
     default:
       throw new Error(`unknown secret source: ${(input as { source?: string }).source}`);
   }
@@ -242,6 +244,42 @@ async function spawnExecProvider(pc: ProviderConfig, ref: SecretRef): Promise<st
     const request = JSON.stringify({
       protocolVersion: 1,
       provider: providerName,
+      ids: [ref.id],
+    });
+    child.stdin.end(request);
+  });
+}
+
+/**
+ * Resolve a keychain-based secret by delegating to lark-cli's exec-provider
+ * endpoint. lark-cli reads from the OS keychain (Windows Credential Manager /
+ * macOS Keychain) and writes the plaintext secret to stdout.
+ */
+async function resolveKeychainRef(ref: SecretRef): Promise<string> {
+  const child = spawnProcess('lark-cli', ['secrets', 'get'], {
+    stdio: ['pipe', 'pipe', 'pipe'] as const,
+  }) as SpawnedProcessByStdio<Writable, Readable, Readable>;
+  return new Promise<string>((resolve, reject) => {
+    let stdout = '';
+    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString('utf8'); });
+    child.on('error', reject);
+    child.on('exit', (code) => {
+      if (code !== 0) return reject(new Error(`lark-cli secrets get exited ${code}`));
+      try {
+        const response = JSON.parse(stdout.trim()) as {
+          values?: Record<string, string>;
+          errors?: Record<string, string>;
+        };
+        const value = response.values?.[ref.id];
+        if (value) return resolve(value);
+        const errMsg = response.errors?.[ref.id] || 'secret not found in keychain';
+        reject(new Error(errMsg));
+      } catch (e) {
+        reject(e instanceof Error ? e : new Error(String(e)));
+      }
+    });
+    const request = JSON.stringify({
+      protocolVersion: 1,
       ids: [ref.id],
     });
     child.stdin.end(request);

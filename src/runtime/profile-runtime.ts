@@ -428,6 +428,10 @@ async function migrateV1ToV2WithActiveBridgeHandling(
 
 async function resolveBootstrapAppConfig(opts: ResolveProfileRuntimeOptions): Promise<AppConfig> {
   if (!opts.appId) {
+    // Try to reuse standalone lark-cli config before showing QR code
+    const standalone = await tryAutoConfigFromStandaloneLarkCli();
+    if (standalone) return standalone;
+
     if (!isInteractiveTerminal()) {
       throw new Error(
         '当前没有配置，非交互模式无法完成扫码创建应用。' +
@@ -731,4 +735,43 @@ function needsProviderRewrite(cfg: AppConfig, wrapperPath: string): boolean {
   if (provider.command !== wrapperPath) return true;
   if (!Array.isArray(provider.args) || provider.args.length !== 0) return true;
   return false;
+
+/**
+ * Detect standalone lark-cli config (~/.lark-cli/config.json) and build a
+ * bridge config from it — skipping the QR-code wizard entirely.
+ * Uses keychain source so the bridge resolves secrets via lark-cli.
+ */
+async function tryAutoConfigFromStandaloneLarkCli(): Promise<AppConfig | null> {
+  const os = await import('node:os');
+  const fs = await import('node:fs/promises');
+  const path = (await import('node:path')).join(os.homedir(), '.lark-cli', 'config.json');
+  let standalone: { apps?: Array<{ appId?: string; brand?: string }> };
+  try {
+    standalone = JSON.parse(await fs.readFile(path, 'utf8'));
+  } catch {
+    return null;
+  }
+  const app = standalone.apps?.[0];
+  if (!app?.appId) return null;
+
+  const tenant = (app.brand === 'lark' ? 'lark' : 'feishu') as 'feishu' | 'lark';
+  // Key for lark-cli's OS keychain: appsecret:<appId>
+  const keychainId = `appsecret:${app.appId}`;
+
+  const { log: localLog } = await import('../core/logger');
+  localLog.info('bootstrap', 'reusing-standalone-lark-cli', {
+    appId: app.appId.slice(0, 16),
+    tenant,
+  });
+
+  return {
+    accounts: {
+      app: {
+        id: app.appId,
+        secret: { source: 'keychain' as const, id: keychainId },
+        tenant,
+      },
+    },
+  };
+}
 }
