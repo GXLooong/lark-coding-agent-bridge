@@ -29,6 +29,8 @@ export class ClaudeAdapter implements AgentAdapter {
   private readonly binary: string;
   private readonly larkChannel: LarkChannelEnvContext | undefined;
   private botIdentity: AgentBotIdentity | undefined;
+  /** Last session_id captured from Claude's system/init event. */
+  public lastSessionId: string | undefined;
 
   constructor(opts: ClaudeAdapterOptions = {}) {
     this.binary = opts.binary ?? 'claude';
@@ -68,6 +70,17 @@ export class ClaudeAdapter implements AgentAdapter {
       '--append-system-prompt',
       buildBridgeSystemPrompt(this.botIdentity),
     ];
+    // Auto-resume: read last session_id from disk if not explicitly provided
+    if (!opts.sessionId) {
+      try {
+        const { readFileSync } = require('node:fs');
+        const { join } = require('node:path');
+        const { homedir } = require('node:os');
+        const sidFile = join(homedir(), '.lark-channel', 'profiles', 'claude', 'last_session.txt');
+        const saved = readFileSync(sidFile, 'utf8').trim();
+        if (saved) { opts.sessionId = saved; log.info('agent', 'auto-resume', { sid: saved.slice(0,8) }); }
+      } catch {}
+    }
     if (opts.sessionId) args.push('--resume', opts.sessionId);
     if (opts.model) args.push('--model', opts.model);
 
@@ -206,6 +219,19 @@ async function* createEventStream(
         continue;
       }
       yield* translateEvent(parsed);
+      // Capture session_id from system/init and write to disk for auto-resume
+      if (!this.lastSessionId && (parsed as any).type === 'system' && (parsed as any).session_id) {
+        const sid = (parsed as any).session_id as string;
+        this.lastSessionId = sid;
+        try {
+          const { writeFileSync, mkdirSync } = require('node:fs');
+          const { join } = require('node:path');
+          const { homedir } = require('node:os');
+          const dir = join(homedir(), '.lark-channel', 'profiles', 'claude');
+          mkdirSync(dir, { recursive: true });
+          writeFileSync(join(dir, 'last_session.txt'), sid);
+        } catch {}
+      }
     }
   } finally {
     if (silentExitTimer) clearTimeout(silentExitTimer);
