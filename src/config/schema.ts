@@ -12,7 +12,7 @@ export type TenantBrand = 'feishu' | 'lark';
  *   - `exec`: spawn `provider.command`, send JSON over stdin, read JSON from stdout
  */
 export interface SecretRef {
-  source: 'env' | 'file' | 'exec';
+  source: 'env' | 'file' | 'exec' | 'keychain';
   provider?: string;
   id: string;
 }
@@ -34,7 +34,7 @@ export interface AppCredentials {
  * richer Go types.
  */
 export interface ProviderConfig {
-  source: 'env' | 'file' | 'exec';
+  source: 'env' | 'file' | 'exec' | 'keychain';
   /** env: allowlist of env var names that ref.id is allowed to be in. */
   allowlist?: string[];
   /** file: optional base path; ref.id is joined onto it. */
