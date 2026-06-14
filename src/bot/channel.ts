@@ -906,6 +906,7 @@ async function runAgentBatch(deps: RunBatchDeps): Promise<void> {
   } catch (err) {
     log.fail('stream', err);
   } finally {
+    await sessions.flush().catch(() => {});
     activePolicyFingerprints.delete(scope);
     scheduleWorkingReactionCleanup(channel, lastMsg.messageId, reactionPromise);
   }
