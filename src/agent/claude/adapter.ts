@@ -178,6 +178,7 @@ async function* createEventStream(
 ): AsyncGenerator<AgentEvent> {
   // If fork itself failed synchronously, child.pid is undefined. The 'error'
   // event (ENOENT etc.) fires in the next tick, so also check getError().
+  try { require('fs').appendFileSync('C:/Users/15054/adapter-stream.log', `${new Date().toISOString()} createEventStream ENTER pid=${child.pid}\n`); } catch {}
   if (!child.pid) {
     const err = getError();
     yield {
