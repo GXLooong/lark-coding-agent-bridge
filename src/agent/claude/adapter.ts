@@ -1,3 +1,6 @@
+import { appendFileSync } from 'node:fs';
+appendFileSync('C:/Users/15054/adapter-module.log', `${new Date().toISOString()} adapter.ts module loaded\n`);
+
 import { createInterface } from 'node:readline';
 import type { Readable } from 'node:stream';
 import { log } from '../../core/logger';
