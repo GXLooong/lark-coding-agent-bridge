@@ -111,6 +111,19 @@ async function checkLarkCli(opts: PreFlightOptions): Promise<void> {
   }
 
   if (privateBinding) {
+    // If standalone lark-cli is already configured for the same app, just
+    // copy its config — no exec-provider bind needed. This avoids the
+    // world-writable check that fails on Windows (Go os.Stat → 0666).
+    const reused = await tryReuseStandaloneLarkCli(bridgeConfig, appPaths);
+    if (reused) {
+      await persistLarkCliConfig(opts, {
+        identityPreset: 'bot-only',
+        importStatus: 'not-needed',
+        reason: 'reused-standalone-config',
+      });
+      return;
+    }
+
     const target = await readPrivateTarget(appPaths, bridgeConfig);
     if (target.sameApp) {
       if (shouldSkipLocalUserImport(opts.profileConfig?.larkCli)) {
@@ -608,6 +621,62 @@ function shouldUseLegacyLarkChannelSourceOverlay(output: string, appPaths: AppPa
     /cannot read .*config\.json/i.test(output) ||
     /no such file or directory/i.test(output)
   );
+}
+
+/**
+ * If standalone lark-cli (~/.lark-cli/config.json) is already configured
+ * for the same app, copy its config into the bridge's private lark-cli
+ * directory. This avoids `lark-cli config bind --source lark-channel` and
+ * the exec-provider world-writable check that always fails on Windows.
+ * Returns true if reuse succeeded.
+ */
+async function tryReuseStandaloneLarkCli(
+  bridgeConfig: AppConfig,
+  appPaths: AppPaths,
+): Promise<boolean> {
+  const os = await import('node:os');
+  const fs = await import('node:fs/promises');
+  const { join, dirname } = await import('node:path');
+  const { copyFile } = await import('node:fs/promises');
+
+  const standaloneConfigPath = join(os.homedir(), '.lark-cli', 'config.json');
+  const standaloneConfigDir = join(os.homedir(), '.lark-cli');
+
+  let standalone: { apps?: Array<{ appId?: string }> };
+  try {
+    const raw = await fs.readFile(standaloneConfigPath, 'utf8');
+    standalone = JSON.parse(raw);
+  } catch {
+    return false;
+  }
+
+  // Check if the standalone config has an entry for our app
+  const appEntry = standalone.apps?.find(
+    (a) => a.appId === bridgeConfig.accounts.app.id,
+  );
+  if (!appEntry) return false;
+
+  // Copy standalone lark-cli config into bridge's private lark-cli dir
+  const targetDir = appPaths.larkCliConfigDir;
+  await fs.mkdir(targetDir, { recursive: true }).catch(() => {});
+
+  // Copy the entire standalone config directory (config.json + keychain state)
+  try {
+    const entries = await fs.readdir(standaloneConfigDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isFile()) {
+        const src = join(standaloneConfigDir, entry.name);
+        const dst = join(targetDir, entry.name);
+        await fs.copyFile(src, dst).catch(() => {});
+      }
+    }
+    log.info('lark-cli', 'reused-standalone', {
+      appId: bridgeConfig.accounts.app.id.slice(0, 16),
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function outputMentionsPath(output: string, path: string): boolean {
