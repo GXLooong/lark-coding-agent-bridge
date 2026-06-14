@@ -206,7 +206,7 @@ async function* createEventStream(
         continue;
       }
       for (const evt of translateEvent(parsed)) {
-        if (evt.type === 'system') log.info('adapter', 'system-event', { sid: evt.sessionId?.slice(0,8) });
+        if (evt.type === 'system') process.stderr.write(`[ADAPTER-DEBUG] system event sid=${evt.sessionId?.slice(0,8) || 'NONE'}\n`);
         yield evt;
       }
     }
