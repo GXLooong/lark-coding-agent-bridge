@@ -206,7 +206,9 @@ async function* createEventStream(
         continue;
       }
       for (const evt of translateEvent(parsed)) {
-        if (evt.type === 'system') process.stderr.write(`[ADAPTER-DEBUG] system event sid=${evt.sessionId?.slice(0,8) || 'NONE'}\n`);
+        if (evt.type === 'system') {
+          try { require('fs').appendFileSync('C:/Users/15054/adapter-debug.log', `${new Date().toISOString()} system sid=${evt.sessionId || 'NONE'}\n`); } catch {}
+        }
         yield evt;
       }
     }
