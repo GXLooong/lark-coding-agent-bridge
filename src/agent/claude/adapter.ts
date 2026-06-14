@@ -205,7 +205,10 @@ async function* createEventStream(
       } catch {
         continue;
       }
-      yield* translateEvent(parsed);
+      for (const evt of translateEvent(parsed)) {
+        if (evt.type === 'system') log.info('adapter', 'system-event', { sid: evt.sessionId?.slice(0,8) });
+        yield evt;
+      }
     }
   } finally {
     if (silentExitTimer) clearTimeout(silentExitTimer);
