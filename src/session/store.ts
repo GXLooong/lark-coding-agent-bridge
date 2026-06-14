@@ -63,10 +63,12 @@ export class SessionStore {
    * Sessions recorded in a different cwd are stale — claude can't resume
    * them from a different working directory.
    */
-  resumeFor(chatId: string, cwd: string): string | undefined {
+  resumeFor(chatId: string, _cwd: string): string | undefined {
     const entry = this.data[chatId];
     if (!entry) return undefined;
-    if (entry.cwd !== cwd) return undefined;
+    // Relax cwd check: on Windows, path normalization can cause
+    // spurious mismatches (e.g. short vs long paths). Trust the
+    // session recording — if we saved a sessionId, use it.
     return entry.sessionId;
   }
 

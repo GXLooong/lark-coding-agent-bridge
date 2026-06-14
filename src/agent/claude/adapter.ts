@@ -1,6 +1,3 @@
-import { appendFileSync } from 'node:fs';
-appendFileSync('C:/Users/15054/adapter-module.log', `${new Date().toISOString()} adapter.ts module loaded\n`);
-
 import { createInterface } from 'node:readline';
 import type { Readable } from 'node:stream';
 import { log } from '../../core/logger';
@@ -178,7 +175,6 @@ async function* createEventStream(
 ): AsyncGenerator<AgentEvent> {
   // If fork itself failed synchronously, child.pid is undefined. The 'error'
   // event (ENOENT etc.) fires in the next tick, so also check getError().
-  try { require('fs').appendFileSync('C:/Users/15054/adapter-stream.log', `${new Date().toISOString()} createEventStream ENTER pid=${child.pid}\n`); } catch {}
   if (!child.pid) {
     const err = getError();
     yield {
@@ -209,12 +205,7 @@ async function* createEventStream(
       } catch {
         continue;
       }
-      for (const evt of translateEvent(parsed)) {
-        if (evt.type === 'system') {
-          try { require('fs').appendFileSync('C:/Users/15054/adapter-debug.log', `${new Date().toISOString()} system sid=${evt.sessionId || 'NONE'}\n`); } catch {}
-        }
-        yield evt;
-      }
+      yield* translateEvent(parsed);
     }
   } finally {
     if (silentExitTimer) clearTimeout(silentExitTimer);

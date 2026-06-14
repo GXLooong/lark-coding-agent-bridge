@@ -745,7 +745,9 @@ async function runAgentBatch(deps: RunBatchDeps): Promise<void> {
       policy: flow.policy,
       event: evt,
     });
-    log.info('session', 'event-received', { type: evt.type, hasSid: Boolean(evt.sessionId), subtype: (evt as any).subtype });
+    if (evt.type === 'system' && evt.sessionId) {
+      log.info('session', 'set', { sessionId: evt.sessionId });
+    }
     if (evt.type === 'system' && evt.threadId) {
       log.info('session', 'set-thread', { threadId: evt.threadId });
     }

@@ -1,6 +1,5 @@
 import type { AgentCapability } from '../agent/capability';
 import type { AgentEvent } from '../agent/types';
-import { log } from '../core/logger';
 import type { ProfileConfig } from '../config/profile-schema';
 import type { AccessDecision } from '../policy/access';
 import {
@@ -186,7 +185,6 @@ export function recordRunSessionEvent(input: RecordRunSessionEventInput): void {
   if (input.event.type !== 'system') return;
   if (input.capability.agentId === 'claude' && input.event.sessionId) {
     const cwdRealpath = input.event.cwd ?? input.policy.cwdRealpath;
-    log.info('session', 'record', { scope: input.scopeId, sid: input.event.sessionId.slice(0,8) });
     input.sessions.set(input.scopeId, input.event.sessionId, cwdRealpath);
     input.sessionCatalog?.upsertActive({
       scopeId: input.scopeId,
